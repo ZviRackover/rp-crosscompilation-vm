@@ -1,0 +1,72 @@
+---
+- hosts: all
+  remote_user: vagrant
+
+  vars:
+    top_dir: "/home/vagrant/raspberrypi"
+
+  tasks:
+    - name: dist-upgrade system
+      apt:  upgrade=dist update_cache=yes
+      sudo: yes
+
+    - name: install packages
+      apt:  name={{ item }}
+      sudo: yes
+      with_items:
+        - tmux
+        - vim
+        - htop
+        - rsync
+        - cmake
+        - curl
+        - wget
+        - build-essential
+        - git
+        - libc6-i386
+        - lib32z1
+        - lib32stdc++6
+
+    - name: create directories
+      file: path={{ item }} state=directory owner=vagrant group=vagrant
+      sudo: yes
+      with_items:
+        - "{{ top_dir }}"
+
+    - name: Clone the raspberry-pi toolchain
+      git: repo=git://github.com/raspberrypi/tools.git
+           dest={{ top_dir }}/tools
+           accept_hostkey=yes
+
+    - name: Update bashrc for PythonBrew for foo user
+      lineinfile: dest=/home/vagrant/.profile
+        line="export PATH=$PATH:{{ top_dir }}/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin"
+        insertafter=EOF
+
+# Not working :(
+#    - name: Sanity test
+#      shell: arm-linux-gnueabihf-gcc -v
+
+### At this point the VM is configured
+### Next: copy the system files from the Raspberry PI
+
+# Not working :(
+#    - name: Sync system files from Raspberry pi
+#      synchronize: src={{ device_host }}:/{{ item }}
+#        dest={{ top_dir }}/rootfs
+#        recursive=yes
+#        links=yes
+#        delete=yes
+#        rsync_opts=--safe-links
+#      with_items:
+#        - usr
+#        - lib
+#
+# Not working either :(
+#    - name: Sync system files from Raspberry pi
+#      shell: rsync -rl --delete-after --safe-links {{ device_host  }}:/{lib,usr} {{ top_dir }}/rootfs
+
+    # For now create a script which will be invoked manually
+    - name: Create script for syncing the Raspberry PI system directories
+      shell: echo "rsync -rl --delete-after --safe-links {{ device_host  }}:/{lib,usr} {{ top_dir }}/rootfs" > {{ top_dir }}/sync_from_raspberry_pi.sh
+    - shell: chmod +x {{ top_dir }}/sync_from_raspberry_pi.sh
